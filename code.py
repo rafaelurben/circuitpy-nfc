@@ -7,15 +7,19 @@ rdr.set_antenna_gain(0x07 << 4)
 led = digitalio.DigitalInOut(board.LED)
 led.direction = digitalio.Direction.OUTPUT
 
-print("Started NFC reader")
+print("[ii] Started NFC reader!")
 
 try:
     while True:
-        led.value = True
+        print("[ii] Scanning...")
+        led.value = False
 
         tag = rdr.scan_for_tag()
-        print(tag)
-        tag.read_all()
+        led.value = True
+
+        print("[ii] Found", tag)
+
+        tag.read_all(verbose=True)
 
 except KeyboardInterrupt:
     print("Bye")
