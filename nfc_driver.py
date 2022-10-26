@@ -189,7 +189,6 @@ class MFRC522:
 
 		self._wreg(0x0D, 0x07)
 		(stat, recv, bits) = self._tocard(0x0C, [mode])
-
 		if (stat != self.OK) | (bits != 0x10):
 			stat = self.ERR
 
@@ -212,7 +211,6 @@ class MFRC522:
 					stat = self.ERR
 			else:
 				stat = self.ERR
-
 		return stat, recv
 
 	def select_tag(self, ser):

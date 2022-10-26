@@ -2,24 +2,33 @@
 Tools for Mifare 1k NFC cards
 """
 
+import math
+
 from nfc_driver import MFRC522
 from nfc_utils import int2hex, list2hex, bytes2str
 
-class Key():
-    """Key for authenticating Mifare 1k NFC cards"""
 
-    def __init__(self, key, is_key_b=False):
+class Key():
+    """Key for classic Mifare authentication"""
+
+    A = MFRC522.AUTHENT1A
+    B = MFRC522.AUTHENT1B
+
+    def __init__(self, key, mode=A):
         if not isinstance(key, list):
             key = list(key)
         if len(key) != 6 or not all([0 <= x <= 255 for x in key]):
             raise ValueError("Key must be 6 bytes long")
+        if mode not in [self.A, self.B]:
+            raise ValueError("Mode must be Key.A or Key.B")
         self.key = key
-        self.mode = MFRC522.AUTHENT1B if is_key_b else MFRC522.AUTHENT1A
-    
+        self.mode = mode
+
     @classmethod
     def default(cls):
         return cls([0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF])
-    
+
+
 class NFCTag():
     """Class representing a Mifare 1k NFC tag"""
 
@@ -50,12 +59,12 @@ class NFCTag():
         u = self.raw_uid
         return f'<NFCTag type="0x{self.tag_type:02x}" uid="0x{u[0]:02x}{u[1]:02x}{u[2]:02x}{u[3]:02x}" />'
 
-    def _authenticate_block(self, blockaddr, key : Key=None) -> bool:
+    def _authenticate_block(self, blockaddr, key: Key = None) -> bool:
         if key is None:
             key = Key.default()
         elif not isinstance(key, Key):
             raise ValueError("Key must be an instance of Key!")
-            
+
         stat = self.rdr.auth(key.mode, blockaddr, key.key, self.raw_uid)
         if stat != MFRC522.OK:
             print(f"[!!] 0x{blockaddr:02x}: Authentication failed! ({stat})")
@@ -63,11 +72,13 @@ class NFCTag():
         return True
 
     def _print_block(self, blockaddr, data, sign='<<', additional='') -> None:
-        print(f"[{sign}] 0x{int2hex(blockaddr)}: {list2hex(data)} {bytes2str(data)}", additional)
+        print(
+            f"[{sign}] 0x{int2hex(blockaddr)}: {list2hex(data)} {bytes2str(data)}", additional)
 
     def _write_block(self, blockaddr, data, key=None, force=False) -> bool:
         if not force and blockaddr not in self.DATA_BLOCKS:
-            raise ValueError("Writing this block could make the tag unusable! Use force=true with caution!")
+            raise ValueError(
+                "Operation CANCELLED! Writing this block could make the tag unusable! Use force=true with caution!")
         elif len(data) > 16:
             raise ValueError("Must be 16 bytes!")
         elif len(data) < 16:
@@ -87,7 +98,7 @@ class NFCTag():
     def _clear_block(self, blockaddr, key=None, force=False) -> bool:
         return self._write_block(blockaddr, b'\x00' * 16, key, force)
 
-    def _read_block(self, blockaddr, key=None) -> list|None:
+    def _read_block(self, blockaddr, key=None) -> list | None:
         if not self._authenticate_block(blockaddr, key):
             return None
 
@@ -97,7 +108,8 @@ class NFCTag():
             return None
 
         if len(data) != 16:
-            print(f"[!<] 0x{blockaddr:02x}: Reading failed! (invalid data length: {len(data)} ({data}))")
+            print(
+                f"[!<] 0x{blockaddr:02x}: Reading failed! (invalid data length: {len(data)} ({data}))")
             return None
 
         self._print_block(blockaddr, data, '<<')
@@ -106,13 +118,13 @@ class NFCTag():
     def _override_block(self, blockaddr, data, pos=0, key=None, force=False) -> bool:
         if len(data) + pos > 16:
             raise ValueError("Must be 16 bytes!")
-        
+
         olddata = self._read_block(blockaddr, key) or b'\x00' * 16
 
         newdata = olddata[:pos] + list(data) + olddata[pos + len(data):]
         return self._write_block(blockaddr, newdata, key, force)
 
-    def read_blocks(self, addresses=range(0, 64), key=None) -> list:
+    def read_blocks(self, addresses=range(0x00, 0x40), key=None) -> list:
         data = []
 
         for i in addresses:
@@ -123,11 +135,33 @@ class NFCTag():
         return data
 
     def data_read(self, key=None) -> list:
+        """Read all data blocks (excluding the empty keyb blocks)"""
         return self.read_blocks(self.DATA_BLOCKS, key)
 
     def data_clear(self, key=None) -> bool:
+        """Clear all data blocks (excluding the empty keyb blocks)"""
         for i in self.DATA_BLOCKS:
             if not self._clear_block(i, key):
+                return False
+        return True
+
+    def data_write(self, data, startpos=0, key=None) -> bool:
+        """Write to all data blocks (only if needed, excluding the empty keyb blocks)"""
+        if isinstance(data, str):
+            data = data.encode('utf-8')
+        elif not isinstance(data, bytes):
+            raise ValueError("Data must be a string or bytes!")
+        elif startpos < 0 or startpos > len(self.DATA_BLOCKS)-1:
+            raise ValueError("Invalid startpos!")
+
+        blocks_required = math.ceil(len(data) / 16)
+        blocks_available = len(self.DATA_BLOCKS)-startpos
+        if blocks_required > blocks_available:
+            raise ValueError(
+                f"Data too long! {blocks_required} blocks required, but only {blocks_available} available!")
+
+        for i in range(startpos, startpos+blocks_required):
+            if not self._write_block(self.DATA_BLOCKS[i], data[i*16:(i+1)*16], key):
                 return False
         return True
 
@@ -139,7 +173,7 @@ class NFCReader(MFRC522):
         super().__init__(*args, **kwargs)
         print("[--] NFC Reader initialized!")
 
-    def get_tag(self) -> NFCTag|None:
+    def get_tag(self) -> NFCTag | None:
         """Get a tag if there is one, otherwise return None"""
 
         (stat, tag_type) = self.request(MFRC522.REQALL)
