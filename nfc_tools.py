@@ -48,6 +48,7 @@ class NFCTag():
         0x30, 0x31, 0x32,
         0x34, 0x35, 0x36,
         0x38, 0x39, 0x3A,
+        0x3C, 0x3D, 0x3E,
     ]
 
     def __init__(self, rdr: MFRC522, raw_uid, tag_type):
@@ -134,9 +135,11 @@ class NFCTag():
             data.append(block)
         return data
 
-    def data_read(self, key=None) -> list:
+    def data_read(self, startpos=0, key=None) -> list:
         """Read all data blocks (excluding the empty keyb blocks)"""
-        return self.read_blocks(self.DATA_BLOCKS, key)
+        if startpos < 0 or startpos > len(self.DATA_BLOCKS)-1:
+            raise ValueError("Invalid startpos!")
+        return self.read_blocks(self.DATA_BLOCKS[startpos::], key)
 
     def data_clear(self, key=None) -> bool:
         """Clear all data blocks (excluding the empty keyb blocks)"""

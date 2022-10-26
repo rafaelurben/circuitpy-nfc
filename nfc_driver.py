@@ -191,7 +191,6 @@ class MFRC522:
 		(stat, recv, bits) = self._tocard(0x0C, [mode])
 		if (stat != self.OK) | (bits != 0x10):
 			stat = self.ERR
-
 		return stat, bits
 
 	def anticoll(self):
