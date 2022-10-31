@@ -6,7 +6,7 @@ With code from <https://github.com/domdfcoding/circuitpython-mfrc522>.
 
 ## To do
 
-- Create ndef.py file for NDEF creation (AN1305.pdf page 37)
+- Implement NDEF messages
 
 ## NFC Default Access Keys
 
