@@ -24,7 +24,7 @@ try:
 
         ntag = NDEFTag(tag)
         #ntag.clean()
-        ntag.read()
+        ntag.read_records()
         
         rdr.stop_crypto1()
         led.value = False
