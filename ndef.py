@@ -3,48 +3,169 @@
 from nfc_tools import NFCTag, Key
 from nfc_utils import bytes2str
 
+
+class NDEFRecordHeader():
+    """NDEF Record Header"""
+
+    def __repr__(self) -> str:
+        return str(self.__dict__)
+
+    @classmethod
+    def from_int(cls, dat: int) -> 'NDEFRecordHeader':
+        """Create a NDEFRecordHeader from a 8bit int"""
+
+        self = cls()
+        self.mb = True if dat & (0x1 << 7) else False  # message begin
+        self.me = True if dat & (0x1 << 6) else False  # message end
+        self.cf = True if dat & (0x1 << 5) else False  # chunk flag
+        self.sr = True if dat & (0x1 << 4) else False  # short record
+        self.il = True if dat & (0x1 << 3) else False  # id length present?
+        self.tnf = dat & 0x7                           # type name format
+        return self
+
+
 class NDEFRecord():
     """A NDEF record"""
 
+    TNF_TYPES = {
+        0x00: "Empty",
+        0x01: "NFC Forum well-known type",
+        0x02: "Media-type",
+        0x03: "Absolute URI",
+        0x04: "External type",
+        0x05: "Unknown",
+        0x06: "Unchanged",
+        0x07: "Reserved"
+    }
+
+    WELL_KNOWN_TYPES = {
+        0x54: "Text",
+        0x55: "URI",
+    }
+
+    WELL_KNOWN_URI_TYPES = {
+        0x00: "",
+        0x01: "http://www.",
+        0x02: "https://www.",
+        0x03: "http://",
+        0x04: "https://",
+        0x05: "tel:",
+        0x06: "mailto:",
+        0x07: "ftp://anonymous:anonymous@",
+        0x08: "ftp://ftp.",
+        0x09: "ftps://",
+        0x0A: "sftp://",
+        0x0B: "smb://",
+        0x0C: "nfs://",
+        0x0D: "ftp://",
+        0x0E: "dav://",
+        0x0F: "news:",
+        0x10: "telnet://",
+        0x11: "imap:",
+        0x12: "rtsp://",
+        0x13: "urn:",
+        0x14: "pop:",
+        0x15: "sip:",
+        0x16: "sips:",
+        0x17: "tftp:",
+        0x18: "btspp://",
+        0x19: "btl2cap://",
+        0x1A: "btgoep://",
+        0x1B: "tcpobex://",
+        0x1C: "irdaobex://",
+        0x1D: "file://",
+        0x1E: "urn:epc:id:",
+        0x1F: "urn:epc:tag:",
+        0x20: "urn:epc:pat:",
+        0x21: "urn:epc:raw:",
+        0x22: "urn:epc:",
+        0x23: "urn:nfc:",
+    }
+
+    def __repr__(self) -> str:
+        return str({"tnf": self.readable_tnf, "type": self.readable_type, "id": self.record_id, "payload": self.payload})
+
+    @property
+    def readable_tnf(self) -> str:
+        """Get the human readable tnf"""
+        return self.TNF_TYPES.get(self.flags.tnf, self.flags.tnf)
+
+    @property
+    def readable_type(self) -> str:
+        """Get the human readable type of the record"""
+        if self.flags.tnf == 0x01:
+            return self.WELL_KNOWN_TYPES.get(self.record_type, self.record_type)
+        return bytes2str(self.record_type)
+
+    @property
+    def payload(self) -> str:
+        """The payload as a string"""
+
+        tnf = self.flags.tnf
+
+        if tnf == 0x1:  # NDEF Well-known type
+            wkt = self.record_type
+            if wkt == 0x55:  # URI
+                identifier = self.raw_payload[0]
+                prefix = self.WELL_KNOWN_URI_TYPES[identifier]
+                url = self.raw_payload[1:]
+                return prefix + url.decode("utf-8")
+        return self.raw_payload
+
+
+class NDEFMessage():
     def __init__(self) -> None:
-        ...
+        self.records = []
+
+    def __repr__(self) -> str:
+        return str(self.__dict__)
 
     @classmethod
-    def parse_from_data(cls, data: bytes):
-        """Parse a NDEF record from a byte array"""
-        print(data)
-        
+    def parse_from_data(cls, data: bytes, total_length: int = None) -> "NDEFRecord":
+        """Parse a NDEF message from a byte array"""
+
         self = cls()
-        
-        dat = data.pop(0)
-        self.mb = dat & (0x1 << 7) # message begin
-        self.me = dat & (0x1 << 6) # message end
-        self.cf = dat & (0x1 << 5) # chunk flag
-        self.sr = dat & (0x1 << 4) # short record
-        self.il = dat & (0x1 << 3) # id length present?
-        self.tnf = dat & 0x7       # type name format
+        self.total_length = total_length
 
-        self.type_length = data.pop(0)
+        while True:
+            rec = NDEFRecord()
+            self.records.append(rec)
 
-        if self.sr:
-            self.payload_length = data.pop(0)
-        else:
-            self.payload_length = (data.pop(0) << 24) + (data.pop(0) << 16) + (data.pop(0) << 8) + data.pop(0)
+            rec.flags = NDEFRecordHeader.from_int(data.pop(0))
+            rec.len_type = data.pop(0)
 
-        if self.il:
-            self.id_length = data.pop(0)
-            
-        self.record_type = 0
-        for _ in range(self.type_length):
-            self.record_type = (self.record_type << 8) + data.pop(0)
-        
-        if self.il:
-            self.record_id = 0
-            for _ in range(self.id_length):
-                self.record_id = (self.record_id << 8) + data.pop(0)        
-        
-        print(self.payload_length, len(data), data, bytes2str(data))
+            if rec.flags.sr:
+                rec.len_payload = data.pop(0)
+            else:
+                rec.len_payload = (
+                    data.pop(0) << 24) + (data.pop(0) << 16) + (data.pop(0) << 8) + data.pop(0)
+
+            if rec.flags.il:
+                rec.len_id = data.pop(0)
+
+            rec.record_type = 0
+            for _ in range(rec.len_type):
+                rec.record_type = (rec.record_type << 8) + data.pop(0)
+
+            if rec.flags.il:
+                rec.record_id = 0
+                for _ in range(rec.len_id):
+                    rec.record_id = (rec.record_id << 8) + data.pop(0)
+            else:
+                rec.record_id = None
+
+            rec.raw_payload = []
+            for _ in range(rec.len_payload):
+                rec.raw_payload.append(data.pop(0))
+            rec.raw_payload = bytes(rec.raw_payload)
+
+            print(rec)
+
+            if rec.flags.me:
+                break
+
         return self
+
 
 class NDEFTag():
     KEYA0 = Key([0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5], Key.A)
@@ -69,36 +190,38 @@ class NDEFTag():
 
     def _read_next(self, key=KEYA1):
         if len(self._buffer) == 0:
-            self._buffer.extend(self.tag._read_block(self.tag.MAIN_DATA_BLOCKS[self._buf_next_block_index], key=key))
+            self._buffer.extend(self.tag._read_block(
+                self.tag.MAIN_DATA_BLOCKS[self._buf_next_block_index], key=key))
             self._buf_next_block_index += 1
         return self._buffer.pop(0)
 
     def _read_next_n(self, n):
         return [self._read_next() for _ in range(n)]
 
-    def read_records(self) -> list[NDEFRecord]:
-        records = []
-        
-        while True:
+    def read_messages(self) -> list[NDEFMessage]:
+        messages = []
+
+        while len(self._buffer) > 0 or self._buf_next_block_index < len(self.tag.MAIN_DATA_BLOCKS):
             tlv_type = self._read_next()
-            
+
             if tlv_type == 0x00:
                 continue
             elif tlv_type == 0xFE:
                 break
-            
+
             tlv_len = self._read_next()
             if tlv_len == 0xFF:
                 tlv_len = (self._read_next() << 8) + self._read_next()
 
             data = self._read_next_n(tlv_len)
-            
-            if tlv_type == 0x03:
-                records.append(NDEFRecord.parse_from_data(data))
-            elif tlv_type == 0xDF:
-                records.append(("Proprietary message", data))
 
-        return records
+            if tlv_type == 0x03:
+                messages.append(NDEFMessage.parse_from_data(
+                    data, total_length=tlv_len))
+            elif tlv_type == 0xDF:
+                messages.append(("Proprietary message", data))
+
+        return messages
 
     def write(self, data, key=KEYA1):
         self.tag.data_write(data, blocks=self.tag.MAIN_DATA_BLOCKS, key=key)

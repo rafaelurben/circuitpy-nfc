@@ -8,6 +8,22 @@ from nfc_driver import MFRC522
 from nfc_utils import int2hex, list2hex, bytes2str
 
 
+class NFCException(Exception):
+    pass
+
+
+class NFCAuthenticationException(NFCException):
+    pass
+
+
+class NFCWritingException(NFCException):
+    pass
+
+
+class NFCReadingException(NFCException):
+    pass
+
+
 class Key():
     """Key for classic Mifare authentication"""
 
@@ -74,9 +90,9 @@ class NFCTag():
             raise ValueError("Key must be an instance of Key!")
 
         stat = self.rdr.auth(key.mode, blockaddr, key.key, self.raw_uid)
-        if stat != MFRC522.OK:
-            print(f"[!!] 0x{blockaddr:02x}: Authentication failed! ({stat})")
-            return False
+        if not (stat == MFRC522.OK):
+            raise NFCAuthenticationException(
+                f"[!!] 0x{blockaddr:02x}: Authentication failed! ({stat})")
         return True
 
     def _print_block(self, blockaddr, data, sign='<<', additional='') -> None:
@@ -97,8 +113,8 @@ class NFCTag():
 
         stat = self.rdr.mifare_write(blockaddr, data)
         if stat != MFRC522.OK:
-            print(f"[>!] 0x{blockaddr:02x}: Writing failed! ({stat})")
-            return False
+            raise NFCWritingException(
+                f"[>!] 0x{blockaddr:02x}: Writing failed! ({stat})")
 
         self._print_block(blockaddr, data, '>>')
         return True
@@ -112,8 +128,8 @@ class NFCTag():
 
         stat, data = self.rdr.mifare_read(blockaddr)
         if stat != MFRC522.OK:
-            print(f"[!<] 0x{blockaddr:02x}: Reading failed! ({stat})")
-            return None
+            raise NFCReadingException(
+                f"[!<] 0x{blockaddr:02x}: Reading failed! ({stat})")
 
         if len(data) != 16:
             print(

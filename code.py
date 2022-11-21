@@ -2,7 +2,7 @@ import board
 import digitalio
 import time
 
-from nfc_tools import NFCReader, NFCTag, Key
+from nfc_tools import NFCReader, NFCTag, Key, NFCException
 from ndef import NDEFTag
 
 DEFAULTkeyA = Key([0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF], Key.A)
@@ -19,12 +19,15 @@ try:
     led.value = False
     while True:
 
-        tag = rdr.scan_for_tag()
-        led.value = True
+        try:
+            tag = rdr.scan_for_tag()
+            led.value = True
 
-        ntag = NDEFTag(tag)
-        #ntag.clean()
-        ntag.read_records()
+            ntag = NDEFTag(tag)
+            #ntag.clean()
+            ntag.read_records()
+        except NFCException as e:
+            print(e)
         
         rdr.stop_crypto1()
         led.value = False
