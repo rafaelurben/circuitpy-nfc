@@ -147,9 +147,9 @@ class NDEFRecord():
             self.len_payload = datastream.pop(0)
         else:
             self.len_payload = (
-                (datastream.pop(0) << 24) + \
-                (datastream.pop(0) << 16) + \
-                (datastream.pop(0) << 8) + \
+                (datastream.pop(0) << 24) +
+                (datastream.pop(0) << 16) +
+                (datastream.pop(0) << 8) +
                 (datastream.pop(0))
             )
 
@@ -174,10 +174,22 @@ class NDEFRecord():
 
         return self
 
-    def get_raw_bytes(self) -> bytes:
-        """Get the raw bytes of the record"""
+    def to_bytes(self, mb: bool = False, me: bool = False) -> bytes:
+        """Get the record in bytes"""
 
-        return self.raw_bytes
+        flags = NDEFRecordHeader(
+            mb=mb,
+            me=me,
+            cf=False,
+            sr=True if self.len_payload < 256 else False,
+            # TODO: implement
+        )
+
+        dat = [flags.to_int()]
+
+        # TODO: implement
+
+        return dat
 
 
 class NDEFMessage():
