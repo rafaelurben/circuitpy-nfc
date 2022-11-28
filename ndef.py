@@ -7,26 +7,6 @@ from nfc_utils import bytes2str
 class NDEFRecordHeader():
     """NDEF Record Header"""
 
-    def __repr__(self) -> str:
-        return str(self.__dict__)
-
-    @classmethod
-    def from_int(cls, dat: int) -> 'NDEFRecordHeader':
-        """Create a NDEFRecordHeader from a 8bit int"""
-
-        self = cls()
-        self.mb = True if dat & (0x1 << 7) else False  # message begin
-        self.me = True if dat & (0x1 << 6) else False  # message end
-        self.cf = True if dat & (0x1 << 5) else False  # chunk flag
-        self.sr = True if dat & (0x1 << 4) else False  # short record
-        self.il = True if dat & (0x1 << 3) else False  # id length present?
-        self.tnf = dat & 0x7                           # type name format
-        return self
-
-
-class NDEFRecord():
-    """A NDEF record"""
-
     TNF_TYPES = {
         0x00: "Empty",
         0x01: "NFC Forum well-known type",
@@ -37,6 +17,51 @@ class NDEFRecord():
         0x06: "Unchanged",
         0x07: "Reserved"
     }
+
+    def __repr__(self) -> str:
+        return str(self.__dict__)
+
+    def __init__(self, mb: bool = False, me: bool = False, cf: bool = False, sr: bool = False, il: bool = False, tnf: int = 0) -> None:
+        self.mb = mb    # Message Begin
+        self.me = me    # Message End
+        self.cf = cf    # Chunk Flag
+        self.sr = sr    # Short Record
+        self.il = il    # ID Length
+        self.tnf = tnf  # Type Name Format (TNF)
+
+    @classmethod
+    def from_int(cls, dat: int) -> 'NDEFRecordHeader':
+        """Create a NDEFRecordHeader from a 8bit int"""
+
+        return cls(
+            mb=True if dat & (0x1 << 7) else False,
+            me=True if dat & (0x1 << 6) else False,
+            cf=True if dat & (0x1 << 5) else False,
+            sr=True if dat & (0x1 << 4) else False,
+            il=True if dat & (0x1 << 3) else False,
+            tnf=dat & 0x7
+        )
+
+    def to_int(self) -> int:
+        """Convert the header to an int"""
+
+        dat = 0
+        if self.mb:
+            dat |= 0x1 << 7
+        if self.me:
+            dat |= 0x1 << 6
+        if self.cf:
+            dat |= 0x1 << 5
+        if self.sr:
+            dat |= 0x1 << 4
+        if self.il:
+            dat |= 0x1 << 3
+        dat |= self.tnf
+        return dat
+
+
+class NDEFRecord():
+    """A NDEF record"""
 
     WELL_KNOWN_TYPES = {
         0x54: "Text",
@@ -88,7 +113,7 @@ class NDEFRecord():
     @property
     def readable_tnf(self) -> str:
         """Get the human readable tnf"""
-        return self.TNF_TYPES.get(self.flags.tnf, self.flags.tnf)
+        return NDEFRecordHeader.TNF_TYPES.get(self.flags.tnf, self.flags.tnf)
 
     @property
     def readable_type(self) -> str:
