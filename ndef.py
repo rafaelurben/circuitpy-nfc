@@ -137,6 +137,48 @@ class NDEFRecord():
                 return prefix + url.decode("utf-8")
         return self.raw_payload
 
+    @classmethod
+    def from_bytes(cls, datastream) -> "NDEFRecord":
+        self = cls()
+        self.flags = NDEFRecordHeader.from_int(datastream.pop(0))
+        self.len_type = datastream.pop(0)
+
+        if self.flags.sr:
+            self.len_payload = datastream.pop(0)
+        else:
+            self.len_payload = (
+                (datastream.pop(0) << 24) + \
+                (datastream.pop(0) << 16) + \
+                (datastream.pop(0) << 8) + \
+                (datastream.pop(0))
+            )
+
+        if self.flags.il:
+            self.len_id = datastream.pop(0)
+
+        self.record_type = 0
+        for _ in range(self.len_type):
+            self.record_type = (self.record_type << 8) + datastream.pop(0)
+
+        if self.flags.il:
+            self.record_id = 0
+            for _ in range(self.len_id):
+                self.record_id = (self.record_id << 8) + datastream.pop(0)
+        else:
+            self.record_id = None
+
+        self.raw_payload = []
+        for _ in range(self.len_payload):
+            self.raw_payload.append(datastream.pop(0))
+        self.raw_payload = bytes(self.raw_payload)
+
+        return self
+
+    def get_raw_bytes(self) -> bytes:
+        """Get the raw bytes of the record"""
+
+        return self.raw_bytes
+
 
 class NDEFMessage():
     def __init__(self) -> None:
@@ -146,45 +188,16 @@ class NDEFMessage():
         return str(self.__dict__)
 
     @classmethod
-    def parse_from_data(cls, data: bytes, total_length: int = None) -> "NDEFRecord":
+    def parse_from_bytes(cls, data: bytes, total_length: int = None) -> "NDEFRecord":
         """Parse a NDEF message from a byte array"""
 
         self = cls()
         self.total_length = total_length
 
         while True:
-            rec = NDEFRecord()
+            # data is being passed by reference
+            rec = NDEFRecord.from_bytes(data)
             self.records.append(rec)
-
-            rec.flags = NDEFRecordHeader.from_int(data.pop(0))
-            rec.len_type = data.pop(0)
-
-            if rec.flags.sr:
-                rec.len_payload = data.pop(0)
-            else:
-                rec.len_payload = (
-                    data.pop(0) << 24) + (data.pop(0) << 16) + (data.pop(0) << 8) + data.pop(0)
-
-            if rec.flags.il:
-                rec.len_id = data.pop(0)
-
-            rec.record_type = 0
-            for _ in range(rec.len_type):
-                rec.record_type = (rec.record_type << 8) + data.pop(0)
-
-            if rec.flags.il:
-                rec.record_id = 0
-                for _ in range(rec.len_id):
-                    rec.record_id = (rec.record_id << 8) + data.pop(0)
-            else:
-                rec.record_id = None
-
-            rec.raw_payload = []
-            for _ in range(rec.len_payload):
-                rec.raw_payload.append(data.pop(0))
-            rec.raw_payload = bytes(rec.raw_payload)
-
-            print(rec)
 
             if rec.flags.me:
                 break
@@ -241,7 +254,7 @@ class NDEFTag():
             data = self._read_next_n(tlv_len)
 
             if tlv_type == 0x03:
-                messages.append(NDEFMessage.parse_from_data(
+                messages.append(NDEFMessage.parse_from_bytes(
                     data, total_length=tlv_len))
             elif tlv_type == 0xDF:
                 messages.append(("Proprietary message", data))
