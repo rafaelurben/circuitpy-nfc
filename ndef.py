@@ -107,6 +107,15 @@ class NDEFRecord():
         0x23: "urn:nfc:",
     }
 
+    def __init__(self) -> None:
+        self.flags: NDEFRecordHeader = NDEFRecordHeader()
+        self.len_type: int = None
+        self.len_payload: int = None
+        self.len_id: int = None
+        self.record_type: int = None
+        self.record_id: int = None
+        self.record_payload: bytes = None
+
     def __repr__(self) -> str:
         return str({"tnf": self.readable_tnf, "type": self.readable_type, "id": self.record_id, "payload": self.payload})
 
@@ -131,18 +140,19 @@ class NDEFRecord():
         if tnf == 0x1:  # NDEF Well-known type
             wkt = self.record_type
             if wkt == 0x55:  # URI
-                identifier = self.raw_payload[0]
+                identifier = self.record_payload[0]
                 prefix = self.WELL_KNOWN_URI_TYPES[identifier]
-                url = self.raw_payload[1:]
+                url = self.record_payload[1:]
                 return prefix + url.decode("utf-8")
-        return self.raw_payload
+        return self.record_payload
 
     @classmethod
     def from_bytes(cls, datastream) -> "NDEFRecord":
         self = cls()
         self.flags = NDEFRecordHeader.from_int(datastream.pop(0))
+        # record type length
         self.len_type = datastream.pop(0)
-
+        # record payload length
         if self.flags.sr:
             self.len_payload = datastream.pop(0)
         else:
@@ -152,43 +162,67 @@ class NDEFRecord():
                 (datastream.pop(0) << 8) +
                 (datastream.pop(0))
             )
-
+        # record id length
         if self.flags.il:
             self.len_id = datastream.pop(0)
 
+        # record type payload
         self.record_type = 0
         for _ in range(self.len_type):
             self.record_type = (self.record_type << 8) + datastream.pop(0)
-
+        # record id payload
         if self.flags.il:
             self.record_id = 0
             for _ in range(self.len_id):
                 self.record_id = (self.record_id << 8) + datastream.pop(0)
         else:
             self.record_id = None
-
-        self.raw_payload = []
+        # record data payload
+        self.record_payload = []
         for _ in range(self.len_payload):
-            self.raw_payload.append(datastream.pop(0))
-        self.raw_payload = bytes(self.raw_payload)
+            self.record_payload.append(datastream.pop(0))
+        self.record_payload = bytes(self.record_payload)
 
         return self
 
-    def to_bytes(self, mb: bool = False, me: bool = False) -> bytes:
+    def to_bytes(self) -> bytes:
         """Get the record in bytes"""
 
-        flags = NDEFRecordHeader(
-            mb=mb,
-            me=me,
+        self.flags = NDEFRecordHeader(
+            mb=self.flags.mb,
+            me=self.flags.me,
             cf=False,
-            sr=True if self.len_payload < 256 else False,
-            # TODO: implement
+            sr=True if len(self.record_payload) < 256 else False,
+            il=True if self.record_id is not None else False,
+            tnf=self.flags.tnf
         )
 
-        dat = [flags.to_int()]
-
-        # TODO: implement
-
+        dat = [self.flags.to_int()]
+        
+        # record type length
+        self.len_type = (self.record_type/256)+1
+        dat.append(self.len_type)
+        # record data length
+        self.len_payload = len(self.record_payload)
+        if self.flags.sr:
+            dat.append(self.len_payload)
+        else:
+            for i in range(3, -1, -1):
+                dat.append((self.len_payload >> (8 * i)) & 0xFF)
+        # record id length
+        if self.flags.il:
+            dat.append((self.record_id//256)+1)
+        
+        # record type payload
+        for i in range((self.len_payload//8), -1, -1):
+            dat.append((self.record_type >> (8*i)) & 0xFFFFFF)
+        # record id payload
+        if self.flags.il:
+            ...
+            # TODO: implement
+        # record data payload
+            # TODO: implement
+        
         return dat
 
 
