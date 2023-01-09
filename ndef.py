@@ -319,5 +319,28 @@ class NDEFTag():
 
         return messages
 
+    def write_messages(self, messages: list[NDEFMessage], key=KEYA1) -> bytes:
+        dat = []
+
+        for msg in messages:
+            msg_dat = msg.to_bytes()
+
+            # tlv type
+            dat.append(0x03)
+
+            # tlv length
+            if len(msg_dat) > 255:
+                dat.append(0xFF)
+                dat.append(len(msg_dat) >> 8)
+                dat.append(len(msg_dat) & 0xFF)
+            else:
+                dat.append(len(msg_dat))
+
+            # data
+            dat.extend(msg_dat)
+
+        dat.append(0xFE)
+        self.write(bytes(dat), key=key)
+
     def write(self, data, key=KEYA1):
         self.tag.data_write(data, blocks=self.tag.MAIN_DATA_BLOCKS, key=key)
