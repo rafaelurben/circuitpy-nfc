@@ -198,9 +198,9 @@ class NDEFRecord():
         )
 
         dat = [self.flags.to_int()]
-        
+
         # record type length
-        self.len_type = (self.record_type/256)+1
+        self.len_type = (self.record_type//256)+1
         dat.append(self.len_type)
         # record data length
         self.len_payload = len(self.record_payload)
@@ -212,18 +212,19 @@ class NDEFRecord():
         # record id length
         if self.flags.il:
             dat.append((self.record_id//256)+1)
-        
+
         # record type payload
-        for i in range((self.len_payload//8), -1, -1):
+        for i in range((self.len_type//8), -1, -1):
             dat.append((self.record_type >> (8*i)) & 0xFFFFFF)
         # record id payload
         if self.flags.il:
-            ...
-            # TODO: implement
+            for i in range(self.len_id, -1, -1):
+                dat.append((self.record_id >> (8*i)) & 0xFFFFFF)
         # record data payload
-            # TODO: implement
-        
-        return dat
+        for i in range(self.len_payload):
+            dat.append(self.record_payload[i])
+
+        return bytes(dat)
 
 
 class NDEFMessage():
@@ -249,6 +250,17 @@ class NDEFMessage():
                 break
 
         return self
+
+    def to_bytes(self) -> bytes:
+        """Convert the message to bytes"""
+
+        dat = []
+        for i, rec in enumerate(self.records):
+            rec.flags.mb = i == 0
+            rec.flags.me = i == len(self.records) - 1
+            dat.extend(rec.to_bytes())
+
+        return bytes(dat)
 
 
 class NDEFTag():
