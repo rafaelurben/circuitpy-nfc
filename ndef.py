@@ -166,18 +166,18 @@ class NDEFRecord():
         if self.flags.il:
             self.len_id = datastream.pop(0)
 
-        # record type payload
+        # record type
         self.record_type = 0
         for _ in range(self.len_type):
             self.record_type = (self.record_type << 8) + datastream.pop(0)
-        # record id payload
+        # record id
         if self.flags.il:
             self.record_id = 0
             for _ in range(self.len_id):
                 self.record_id = (self.record_id << 8) + datastream.pop(0)
         else:
             self.record_id = None
-        # record data payload
+        # record payload
         self.record_payload = []
         for _ in range(self.len_payload):
             self.record_payload.append(datastream.pop(0))
