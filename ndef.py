@@ -143,7 +143,7 @@ class NDEFRecord():
                 identifier = self.record_payload[0]
                 prefix = self.WELL_KNOWN_URI_TYPES[identifier]
                 url = self.record_payload[1:]
-                return prefix + url.decode("utf-8")
+                return prefix + bytes(url).decode("utf-8")
         return self.record_payload
 
     @classmethod
@@ -226,10 +226,33 @@ class NDEFRecord():
 
         return bytes(dat)
 
+    # Record creation helpers
+    @classmethod
+    def create_uri(cls, uri: str) -> "NDEFRecord":
+        """Create a URI record"""
+
+        self = cls()
+        self.flags = NDEFRecordHeader(tnf=0x1)
+        self.record_type = 0x55
+
+        identifier = 0x0
+        prefix = ""
+        for _identifier, _prefix in self.WELL_KNOWN_URI_TYPES.items():
+            if _prefix != "" and uri.startswith(_prefix):
+                identifier = _identifier
+                prefix = _prefix
+                break
+
+        uri = uri[len(prefix):]
+        self.record_payload = bytes([identifier] +
+                                    list(uri.encode("utf-8")))
+
+        return self
+
 
 class NDEFMessage():
-    def __init__(self) -> None:
-        self.records = []
+    def __init__(self, records=[]) -> None:
+        self.records = records
 
     def __repr__(self) -> str:
         return str(self.__dict__)
