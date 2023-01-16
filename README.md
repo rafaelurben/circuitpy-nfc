@@ -2,13 +2,25 @@
 
 Using a **RC522 RFID Module** with **CircuitPython** on a **Seeed XIAO RP2040**.
 
+Tested with and build for **Mifare Classic 1k** cards.
+
 With code from <https://github.com/domdfcoding/circuitpython-mfrc522>.
 
-## To do
+## Pin diagram
 
-- Implement NDEF messages
+![Pin diagram](documentation/pin_diagram.png)
 
-## NFC Default Access Keys
+## NFC research
+
+### Documents
+
+NOTE: I do not own any of the following documents. They have been included in this repository for reference only and are available on the internet.
+
+- [Mifare Classic datasheet](documentation/AN1305.pdf)
+- [Mifare Classic 1k datasheet](documentation/MF1S50YYX_V1.pdf)
+- [NDEF summary](documentation/NDEF.pdf)
+
+### NFC Default Access Keys
 
 | Description      | Key A             | Key B             |
 | ---------------- | ----------------- | ----------------- |
