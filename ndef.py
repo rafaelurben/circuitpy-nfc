@@ -251,8 +251,8 @@ class NDEFRecord():
 
 
 class NDEFMessage():
-    def __init__(self, records=[]) -> None:
-        self.records = records
+    def __init__(self, records=None) -> None:
+        self.records = [] if not records else records
 
     def __repr__(self) -> str:
         return str(self.__dict__)
